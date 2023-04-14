@@ -1,6 +1,6 @@
 using Plots
-include("Chromosone.jl")
-function plot_chromosome(solution::Chromosone, n::Int64=8)::Plots.Plot
+include("Chromosome.jl")
+function plot_chromosome(solution::Chromosome, n::Int64=8)::Plots.Plot
     board = zeros(n, n)
     for i in 1:n
         for j in 1:n

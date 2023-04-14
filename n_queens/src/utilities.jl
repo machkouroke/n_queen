@@ -4,25 +4,24 @@ using Statistics
 using Random
 
 include("./Queen.jl")
-include("Chromosone.jl")
+include("Chromosome.jl")
 
 
 
-⊛(x::Int64, params::Tuple{Float64,Int64})::Int64 = (rand() < params[1]) ? x : rand(setdiff(1:params[2], x))
-function generate_solution(n::Int)::Vector{Queen}
-    return [Queen(i, j) for (i, j) in enumerate(randperm(n))]
+function generate_solution(n::Int)::Chromosome
+    return [Queen(i, j) for (i, j) in enumerate(randperm(n))] |> Chromosome
 end
 
-function randpop(popsize::Int64, n::Int64)::Matrix{Queen}
-    return hcat([generate_solution(n) for _ in 1:popsize]...) |> transpose |> Matrix
+function randpop(popsize::Int64, n::Int64)::Vector{Chromosome}
+    return [generate_solution(n) for _ in 1:popsize]
 end
 
-function roulette(popsize::Int64, n_parents::Int64, population::Matrix{Queen})::Vector{Int64}
-    evaluations = mapslices(x -> x |> Chromosone |> fitness, population, dims=2)
+function roulette(popsize::Int64, n_parents::Int64, population::Vector{Chromosome})::Vector{Int64}
+    evaluations::Vector{Float64} = [fitness(x) for x in population]
     evaluations = evaluations ./ sum(evaluations)
     return sample(1:popsize, Weights(vec(evaluations)), n_parents)
 end
-function select(popsize::Int64, n_parents::Int64, population::Matrix{Queen}; method::String="random")::Vector{Int64}
+function select(popsize::Int64, n_parents::Int64, population::Vector{Chromosome}; method::String="random")::Vector{Int64}
     @match method begin
         "random" => randperm(popsize)[1:n_parents]
         "roulette" => roulette(popsize, n_parents, population)
@@ -30,46 +29,62 @@ function select(popsize::Int64, n_parents::Int64, population::Matrix{Queen}; met
     end
 end
 
-function make_mates(population::Matrix{Queen}, n_parents::Int64, n_mates::Int64; method::String="random")::Tuple
+function make_mates(population::Vector{Chromosome}, n_parents::Int64, n_mates::Int64; method::String="random")::Tuple
     mates::Tuple = ()
     for _ in 1:n_mates
         indices::Vector{Int64} = select(size(population)[1], n_parents, population; method=method)
-        mates = (mates..., (population[indices[1], :], population[indices[2], :]))
+        mates = (mates..., (population[indices[1]], population[indices[2]]))
     end
     return mates
 end
 
-function crossover(parents::Matrix{Queen})::Vector{Queen}
-
-    return [Queen(queen_1.x, rand([queen_1.y, queen_2.y])) for (queen_1, queen_2) in zip(parents[1, :], parents[2, :])]
+function crossover(parents::Vector{Chromosome})::Chromosome
+    genes_limit::Vector{Int64} = [rand(1:length(parents[1])) for _ in 1:2] |> sort
+    child::Chromosome = Chromosome([Queen(i, 0) for i in 1:length(parents[1])])
+    child[genes_limit[1]:genes_limit[2]] = parents[1][genes_limit[1]:genes_limit[2]]
+    other_queen::Vector{Queen} = [queen for queen in parents[2] if queen.y ∉ getproperty.(child, :y)]
+    for index in setdiff(1:length(child), genes_limit[1]:genes_limit[2])
+        child[index] = Queen(index, other_queen[1].y)
+        other_queen = other_queen[2:end]
+    end
+    return child
 end
 
-function mutation(child::Vector{Queen}, n::Int64)::Vector{Queen}
-    probability::Float64 = 1 / n
-    return [Queen(queen.x, queen.y ⊛ (probability, n)) for queen in child]
+function mutation(child::Chromosome, n::Int64)::Chromosome
+    mutated_child::Chromosome = deepcopy(child)
+    probability::Float64 = 0.8
+    for i in 1:2
+        if (rand()) < probability
+            swap_index::Int64 = rand(setdiff(1:n, i))
+            mutated_child[i], mutated_child[swap_index] = Queen(i, mutated_child[swap_index].y), Queen(swap_index, mutated_child[i].y)
+        end
+    end
+
+    return mutated_child
 end
 
-function survival(n_survivors::Int64, population::Matrix{Queen})::Matrix{Queen}
-    evaluations = mapslices(x -> x |> Chromosone |> fitness, population, dims=2)
+function survival(n_survivors::Int64, population::Vector{Chromosome})::Vector{Chromosome}
+    evaluations::Vector{Float64} = [fitness(x) for x in population]
     indices_tries = sortperm(vec(evaluations), rev=true)
-    return population[indices_tries[1:n_survivors], :]
+    return population[indices_tries[1:n_survivors]]
 end
 
 
-function eliminate_duplicates(population::Matrix{Queen})::Matrix{Queen}
-    return unique(population, dims=1)
+
+function eliminate_duplicates(population::Vector{Chromosome})::Vector{Chromosome}
+    return unique(population)
 end
 
-function average_fitness(population::Matrix{Queen})
-    return mean(mapslices(x -> x |> Chromosone |> fitness, population, dims=2))
+function aggregate_fitness(population::Vector{Chromosome}; method=mean)::Float64
+    if method == mean
+        return mean([fitness(x) for x in population])
+    end
+    return method([fitness(x) for x in population]...)
 end
 
-function maximum_fitness(population::Matrix{Queen})
-    return maximum(mapslices(x -> x |> Chromosone |> fitness, population, dims=2))
-end
-function minimum_fitness(population::Matrix{Queen})
-    return minimum(mapslices(x -> x |> Chromosone |> fitness, population, dims=2))
-end
+
+
+
 
 
 
