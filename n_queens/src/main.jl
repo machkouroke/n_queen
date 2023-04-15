@@ -22,4 +22,3 @@ function main(debug::Bool=false)
     display(p)
 end
 
-main()

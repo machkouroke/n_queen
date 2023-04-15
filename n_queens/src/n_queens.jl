@@ -1,5 +1,5 @@
 module n_queens
+include("main.jl")
+main()
 
-greet() = print("Hello World!")
-
-end # module n_queens
+end 
